@@ -1,0 +1,18 @@
+# --- Crawler & Scraping ---
+playwright
+playwright-stealth
+beautifulsoup4
+
+# --- Database & Storage ---
+psycopg2-binary
+minio
+s3fs
+
+# --- Data Processing & Analysis ---
+pandas
+pyarrow
+pyspark==3.5.1
+
+# --- Utilities ---
+python-dotenv
+requests

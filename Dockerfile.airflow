@@ -1,0 +1,25 @@
+FROM apache/airflow:2.7.1
+
+USER root
+# Cài đặt màn hình ảo Xvfb
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    libnss3 \ 
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+RUN pip install playwright playwright-stealth beautifulsoup4 psycopg2-binary minio s3fs pandas pyarrow
+
+RUN playwright install chromium
