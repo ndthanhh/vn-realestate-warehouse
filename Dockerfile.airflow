@@ -1,10 +1,11 @@
 FROM apache/airflow:2.7.1
 
 USER root
-# Cài đặt màn hình ảo Xvfb
+
+# 1. Cài đặt các thư viện hệ thống cơ bản và màn hình ảo
 RUN apt-get update && apt-get install -y \
     xvfb \
-    libnss3 \ 
+    libnss3 \
     libatk1.0-0 \
     libatk-bridge2.0-0 \
     libcups2 \
@@ -15,11 +16,27 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libgbm1 \
     libasound2 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    libcairo2 \
+    docker.io
 
 USER airflow
 
+# 2. Cài đặt thư viện Python (Airflow sẽ tự lưu vào /home/airflow/.local)
 RUN pip install playwright playwright-stealth beautifulsoup4 psycopg2-binary minio s3fs pandas pyarrow
 
+# 3. Cài đặt trình duyệt
 RUN playwright install chromium
+
+USER root
+
+# 4. CHÌA KHÓA: Trỏ đường dẫn Python cho root để nó hiểu thư viện của user airflow
+ENV PYTHONPATH=/home/airflow/.local/lib/python3.8/site-packages
+RUN /home/airflow/.local/bin/playwright install-deps chromium
+
+# 5. Dọn dẹp rác hệ thống
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 6. Trả lại quyền cho user airflow (Bắt buộc)
+USER airflow

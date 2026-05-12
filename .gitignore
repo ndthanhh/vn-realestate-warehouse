@@ -25,7 +25,11 @@ minio_data/
 # Loại bỏ các thư mục lưu session của trình duyệt
 playwright_data/
 playwright_data_detail/
+crawler/playwright_data/
+crawler/playwright_data_detail/
+crawler/debug_*.html
 *.log
+docs/*.resolved
 
 # --- IDEs ---
 .vscode/

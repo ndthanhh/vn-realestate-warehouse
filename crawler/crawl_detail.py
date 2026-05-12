@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-from playwright_stealth.stealth import Stealth
+from playwright_stealth import stealth_sync
 from bs4 import BeautifulSoup
 import psycopg2
 import io
@@ -9,20 +9,23 @@ from minio import Minio
 import json
 from datetime import datetime
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 PG2_CONFIG={
-    "host":"db",
-    "port":"5432",
-    "database":"realestate_db",
-    "user":"dev_user",
-    "password":"dev_password"
+    "host": os.getenv("DB_HOST", "db"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "database": os.getenv("POSTGRES_DB", "realestate_db"),
+    "user": os.getenv("POSTGRES_USER", "dev_user"),
+    "password": os.getenv("POSTGRES_PASSWORD", "dev_password")
 }
 
 MINIO_CONFIG={
-    "endpoint":"minio:9000",
-    "access_key":"minioadmin",
-    "secret_key":"minioadmin",
-    "secure":False
+    "endpoint": os.getenv("MINIO_ENDPOINT", "minio:9000"),
+    "access_key": os.getenv("MINIO_ROOT_USER", "minioadmin"),
+    "secret_key": os.getenv("MINIO_ROOT_PASSWORD", "minioadmin"),
+    "secure": False
 }
 
 BUCKET_NAME="realestate"
@@ -31,7 +34,7 @@ def load_from_pg2(limit = 10):
     try:
         conn = psycopg2.connect(**PG2_CONFIG)
         cur = conn.cursor()
-        cur.execute("SELECT url FROM raw_listings_links WHERE status = 'pending' LIMIT 10")
+        cur.execute("SELECT url FROM raw_listings_links WHERE status = 'pending' LIMIT %s", (limit,))
         links =[]
         rows = cur.fetchall()
         for row in rows:
@@ -77,7 +80,14 @@ def upload_to_minio(client, data, url):
 
 def scrape_detail(page, url):
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
-    time.sleep(random.uniform(5, 8))
+    
+    # Chờ trang load xong Data thực tế thay vì Cloudflare Captcha (tăng timeout lên 30s)
+    try:
+        page.wait_for_selector('h1.re__pr-title', state='attached', timeout=30000)
+    except Exception:
+        raise Exception("Bi Cloudflare chan hoac trang khong co du lieu, DUNG LUU vao MinIO!")
+    
+    time.sleep(random.uniform(3, 5))
     page.evaluate("scrollBy(0, 800)")
     time.sleep(2)
 
@@ -138,12 +148,12 @@ def run():
     if not minio_client.bucket_exists(BUCKET_NAME):
         minio_client.make_bucket(BUCKET_NAME)
 
-    links = load_from_pg2(limit=5)
+    links = load_from_pg2(limit=1)
     if not links:
         print("Khong con links nao!")
         return 
 
-    with Stealth().use_sync(sync_playwright()) as p:
+    with sync_playwright() as p:
         user_data_dir = os.path.join(os.getcwd(), "playwright_data_detail")
         context=p.chromium.launch_persistent_context(
             user_data_dir,
@@ -152,6 +162,7 @@ def run():
             args=["--disable-blink-features=AutomationControlled"]
         )
         page = context.pages[0] if context.pages else context.new_page()
+        stealth_sync(page)
 
         for url in links:
             print(f"Dang cao: {url}")
@@ -163,7 +174,9 @@ def run():
             except Exception as e:
                 print(f"Loi cao: {e}")
 
-            time.sleep(random.uniform(8, 15))
+            wait_time = random.uniform(20, 35)
+            print(f"Nghi ngoi {wait_time:.1f} giay de ne Cloudflare...")
+            time.sleep(wait_time)
         
         context.close()
     print("Done!")

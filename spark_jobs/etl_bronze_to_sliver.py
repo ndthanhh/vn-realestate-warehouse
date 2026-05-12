@@ -1,5 +1,9 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, regexp_replace, to_date, lit, trim, split
+from pyspark.sql.functions import col, regexp_replace, to_date, lit, trim, split, element_at, when, size
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def safe_struct_col(df, struct_col_name, sub_col_name):
     try:
@@ -14,9 +18,9 @@ def safe_struct_col(df, struct_col_name, sub_col_name):
 def create_spark_session():
     return SparkSession.builder\
         .appName("ETL_Bronze_to_Sliver_BatDongSan")\
-        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000")\
-        .config("spark.hadoop.fs.s3a.access.key", "minioadmin")\
-        .config("spark.hadoop.fs.s3a.secret.key", "minioadmin")\
+        .config("spark.hadoop.fs.s3a.endpoint", f"http://{os.getenv('MINIO_ENDPOINT', 'minio:9000')}")\
+        .config("spark.hadoop.fs.s3a.access.key", os.getenv("MINIO_ROOT_USER", "minioadmin"))\
+        .config("spark.hadoop.fs.s3a.secret.key", os.getenv("MINIO_ROOT_PASSWORD", "minioadmin"))\
         .config("spark.hadoop.fs.s3a.path.style.access", "true")\
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")\
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled","false")\
@@ -54,13 +58,25 @@ def main():
             safe_struct_col(df_bronze, "specs", "Pháp lý").alias("legal_status")
         )
 
-        addr_split = split(col("address_line_2"), ",")
-        df_sliver  = df_sliver.withColumn("district", trim(addr_split.getItem(0)))\
-            .withColumn("city", trim(addr_split.getItem(1)))
+        # LỌC RÁC: Chỉ giữ lại những tin có Data hợp lệ (bị Cloudflare chặn sẽ mất title)
+        df_sliver = df_sliver.filter(col("title").isNotNull() & (trim(col("title")) != ""))
+
+        addr2_arr = split(col("address_line_2"), ",")
         
-        # Làm sạch district và cityLabels
+        # LỌC RÁC: Loại bỏ các dòng không có address_line_2 hợp lệ (phải có ít nhất 2 thành phần)
+        # Vì address_line_1 là địa chỉ sau sáp nhập nên không đồng nhất.
+        df_sliver = df_sliver.filter(size(addr2_arr) >= 2)
+
+        # Lấy district và city trực tiếp từ address_line_2
+        df_sliver = df_sliver.withColumn("district", trim(element_at(addr2_arr, 1)))
+        df_sliver = df_sliver.withColumn("city", trim(element_at(addr2_arr, 2)))
+        
+        # Làm sạch: Bỏ chữ Quận/Huyện ở quận (để lại Phường/Xã), bỏ chữ 'mới'/'cũ' ở Tỉnh
         df_sliver = df_sliver.withColumn("district", regexp_replace("district", "^(Quận|Huyện|Thị xã)\\s+", ""))\
-            .withColumn("city", regexp_replace("city", "\\s+cũ$", ""))
+            .withColumn("city", regexp_replace("city", "\\s+(mới|cũ)$", ""))
+            
+        # CHỈ GIỮ LẠI XÃ/PHƯỜNG: Xóa toàn bộ các dòng không có chữ Xã hoặc Phường ở trước (đây là các giá trị cũ hoặc lấy sai tuyến)
+        df_sliver = df_sliver.filter(col("district").rlike("^(Xã|Phường)\\s"))
         
         df_sliver = df_sliver.withColumn("price", regexp_replace("price_raw", "[^0-9,]", "")) \
              .withColumn("price", regexp_replace("price", ",", ".").cast("double"))
@@ -76,7 +92,8 @@ def main():
 
     except Exception as e:
         print(f"Loi khi xu ly: {e}")
-        df_sliver = df_bronze
+        spark.stop()
+        raise  # DỪNG NGAY, không ghi đè Silver bằng dữ liệu Bronze thô
 
     sliver_path = "s3a://realestate/silver/batdongsan/"
     df_sliver.write.mode("overwrite").partitionBy("dt").parquet(sliver_path)

@@ -13,6 +13,10 @@ pandas
 pyarrow
 pyspark==3.5.1
 
+# --- Dashboard ---
+streamlit
+plotly
+
 # --- Utilities ---
 python-dotenv
 requests
