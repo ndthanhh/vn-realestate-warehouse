@@ -26,6 +26,8 @@ services:
 
   spark-master:
     image: public.ecr.aws/bitnami/spark:3.5.1
+    env_file:
+      - .env
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -38,6 +40,8 @@ services:
 
   spark-worker:
     image: public.ecr.aws/bitnami/spark:3.5.1
+    env_file:
+      - .env
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
@@ -99,6 +103,8 @@ services:
         condition: service_completed_successfully
     ports:
       - "8081:8080"
+    env_file:
+      - .env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
@@ -119,6 +125,8 @@ services:
     depends_on:
       airflow-init:
         condition: service_completed_successfully
+    env_file:
+      - .env
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False

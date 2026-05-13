@@ -1,9 +1,6 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, current_timestamp, regexp_replace, lower, when, split, trim
+from pyspark.sql.functions import col, current_timestamp, regexp_replace, lower, when, split, trim, expr
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 def create_spark_session():
     return SparkSession.builder\
@@ -19,7 +16,7 @@ def create_spark_session():
 def main():
     spark = create_spark_session()
 
-    sliver_path = "s3a://realestate/silver/batdongsan/"
+    silver_path = "s3a://realestate/silver/batdongsan/"
     db_host = os.getenv("DB_HOST", "db")
     db_port = os.getenv("DB_PORT", "5432")
     db_name = os.getenv("POSTGRES_DB", "realestate_db")
@@ -34,11 +31,10 @@ def main():
     }
 
     try: 
-        print(f"Dang doc du lieu tu: {sliver_path}")
-        df_sliver = spark.read.parquet(sliver_path)
+        print(f"Dang doc du lieu tu: {silver_path}")
+        df_silver = spark.read.parquet(silver_path)
 
-        print("Dang khu trung lap va lam sach du lieu...")
-        df_gold = df_sliver.dropDuplicates(["url"])
+        df_gold = df_silver.dropDuplicates(["url"])
         df_gold = df_gold.withColumn("has_legal_docs", 
             when(lower(col("legal_status")).contains("sổ") | 
                  lower(col("legal_status")).contains("đỏ") | 
@@ -47,15 +43,8 @@ def main():
         df_gold = df_gold.withColumn("num_bedrooms", 
             regexp_replace(col("specs_bedrooms_raw"), "[^0-9]", "").cast("int"))
 
-        # Trích xuất tên dự án thông minh:
-        # 1. Tách địa chỉ thành mảng
-        # 2. Loại bỏ các phần tử bắt đầu bằng "Số" hoặc chỉ chứa số/mã nhà (ví dụ: 54, 233B)
-        # 3. Lấy phần tử đầu tiên còn lại làm tên dự án
         addr_parts = split(col("address"), ",")
         
-
-        
-        from pyspark.sql.functions import expr
         df_gold = df_gold.withColumn("addr_array", addr_parts)
         df_gold = df_gold.withColumn("project_name", expr("filter(addr_array, x -> NOT (trim(x) rlike '^[0-9/\\\\sA-Za-z]{1,6}$' OR lower(trim(x)) LIKE 'số%'))[0]"))
         df_gold = df_gold.withColumn("project_name", trim(col("project_name")))
@@ -70,9 +59,6 @@ def main():
         df_final = df_gold.select(*final_columns) \
             .withColumn("gold_loaded_at", current_timestamp())
 
-        # === UPSERT: Ghi vào bảng tạm rồi gộp vào bảng chính ===
-        # Bước 1: Ghi dữ liệu mới vào bảng staging (ghi đè staging là OK)
-        print("Dang ghi du lieu vao bang staging...")
         df_final.write.jdbc(
             url=jdbc_url,
             table="stg_listings",
@@ -80,9 +66,6 @@ def main():
             properties=connection_properties
         )
 
-        # Bước 2: Chạy SQL UPSERT từ staging → fact_listings
-        print("Dang upsert vao bang fact_listings...")
-        # Đăng ký Driver qua Spark context để tránh lỗi ClassNotFound
         spark._jvm.org.apache.spark.sql.execution.datasources.jdbc.DriverRegistry.register("org.postgresql.Driver")
         conn = spark._jvm.java.sql.DriverManager.getConnection(
             jdbc_url, db_user, db_pass
@@ -116,11 +99,8 @@ def main():
         stmt.close()
         conn.close()
 
-        print("=" * 50)
-        print(" THANH CONG: UPSERT HOAN TAT ")
-        print(f" Tong so ban ghi Silver: {df_sliver.count()}")
-        print(f" Tong so ban ghi Gold (sau khu trung): {df_final.count()}")
-        print("=" * 50)
+        print(f" Tong so ban ghi Silver: {df_silver.count()}")
+        print(f" Tong so ban ghi Gold: {df_final.count()}")
     
     except Exception as e:
         print(f"Loi khi xu ly etl: {e}")

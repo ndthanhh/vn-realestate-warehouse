@@ -7,7 +7,6 @@ import random
 import os
 from dotenv import load_dotenv
 
-# Tải biến môi trường từ file .env
 load_dotenv()
 
 DB_CONFIG = {
@@ -34,10 +33,8 @@ LOCATIONS = [
 
 DOMAIN = "https://batdongsan.com.vn"
 
-# === HÀM QUẢN LÝ TRẠNG THÁI ===
 
 def get_current_page(location_name):
-    """Lấy số trang đang cào dở của một tỉnh"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
@@ -51,7 +48,6 @@ def get_current_page(location_name):
         return 1
 
 def update_state(location_name, next_page):
-    """Cập nhật trang tiếp theo cần cào"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
@@ -68,7 +64,6 @@ def update_state(location_name, next_page):
         print(f"Loi luu state: {e}")
 
 def get_next_location_index():
-    """Lấy index tỉnh tiếp theo cần cào (xoay vòng round-robin)"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
@@ -81,7 +76,6 @@ def get_next_location_index():
         return 0
 
 def set_next_location_index(idx):
-    """Lưu index tỉnh tiếp theo cho lần chạy sau"""
     try:
         conn = psycopg2.connect(**DB_CONFIG)
         cur = conn.cursor()
@@ -95,7 +89,6 @@ def set_next_location_index(idx):
     except Exception as e:
         print(f"Loi luu index: {e}")
 
-# === HÀM LƯU DỮ LIỆU ===
 
 def save_to_db(links):
     try:
@@ -124,13 +117,11 @@ def save_to_db(links):
         print(f"Loi: {e}")
         return 0
 
-# === HÀM CÀO TRANG ===
 
 def crawl_page(page, url):
     try:
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
         
-        # Chờ cho đến khi JS render xong (tối đa 15s)
         try:
             page.wait_for_selector('a.js__product-link-for-product-id', state='attached', timeout=15000)
         except Exception:
@@ -164,7 +155,6 @@ def crawl_page(page, url):
         print(f"Loi khi cao {url}: {e}")
         return []
 
-# === HÀM CHÍNH ===
 
 def crawl_link():
     with sync_playwright() as p:
@@ -176,7 +166,6 @@ def crawl_link():
 
         stealth_sync(page)
 
-        # Lấy tỉnh tiếp theo theo thứ tự xoay vòng (round-robin)
         loc_index = get_next_location_index()
         loc = LOCATIONS[loc_index % len(LOCATIONS)]
         current_page = get_current_page(loc['name'])
@@ -194,7 +183,6 @@ def crawl_link():
             print(f"Den trang cuoi cua {loc['name']}")
             update_state(loc['name'], 1)
 
-        # Xoay sang tỉnh tiếp theo cho lần chạy sau
         next_index = (loc_index + 1) % len(LOCATIONS)
         set_next_location_index(next_index)
         print(f"Lan chay tiep theo se cao: {LOCATIONS[next_index]['name']}")

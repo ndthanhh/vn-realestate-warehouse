@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y \
 USER airflow
 
 # 2. Cài đặt thư viện Python (Airflow sẽ tự lưu vào /home/airflow/.local)
-RUN pip install playwright playwright-stealth beautifulsoup4 psycopg2-binary minio s3fs pandas pyarrow
+RUN pip install playwright playwright-stealth beautifulsoup4 psycopg2-binary minio s3fs pandas pyarrow python-dotenv
 
 # 3. Cài đặt trình duyệt
 RUN playwright install chromium

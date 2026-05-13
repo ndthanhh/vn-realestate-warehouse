@@ -81,7 +81,6 @@ def upload_to_minio(client, data, url):
 def scrape_detail(page, url):
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
     
-    # Chờ trang load xong Data thực tế thay vì Cloudflare Captcha (tăng timeout lên 30s)
     try:
         page.wait_for_selector('h1.re__pr-title', state='attached', timeout=30000)
     except Exception:
@@ -97,12 +96,10 @@ def scrape_detail(page, url):
     title_tag = soup.find('h1', class_='re__pr-title')
     title = title_tag.get_text(strip=True) if title_tag else ""
 
-    # Lấy địa chỉ đa tầng
     addr_line_1 = soup.find('span', class_='re__address-line-1')
     addr_line_2 = soup.find('span', class_='re__address-line-2')
     
     address_1 = addr_line_1.get_text(strip=True) if addr_line_1 else ""
-    # Loại bỏ dấu ngoặc đơn ở hai đầu line 2 nếu có
     address_2 = addr_line_2.get_text(strip=True).strip("()") if addr_line_2 else ""
 
     short_info={}

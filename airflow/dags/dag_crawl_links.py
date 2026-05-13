@@ -9,17 +9,15 @@ default_args = {
     'retry_delay': timedelta(minutes=2),
 }
 
-# DAG này chạy 15 phút/lần - Chỉ lo cào Link từ danh sách tỉnh
 with DAG(
     'dag_crawl_links',
     default_args=default_args,
-    description='Thu thap link BDS tu batdongsan.com.vn (15 phut/lan)',
+    description='Crawl real estate links (every 15 min)',
     schedule_interval='*/15 * * * *',
     catchup=False,
     tags=['realestate', 'crawler', 'links'],
 ) as dag:
 
-    # Cào link từ các tỉnh theo cơ chế xoay vòng
     crawl_links = BashOperator(
         task_id='crawl_links',
         bash_command='xvfb-run -a python /opt/crawler/crawl_link.py',

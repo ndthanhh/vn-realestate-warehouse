@@ -13,33 +13,48 @@ st.set_page_config(
     layout = "wide",
 )
 
-@st.cache_resource
 def get_connection():
-    host = os.getenv("DB_HOST", "localhost")
+    host = os.getenv("DB_HOST", "127.0.0.1")
     port = os.getenv("DB_PORT", "5439")
     database = os.getenv("POSTGRES_DB", "realestate_db")
     user = os.getenv("POSTGRES_USER", "dev_user")
     password = os.getenv("POSTGRES_PASSWORD", "dev_password")
     
-    return psycopg2.connect(
-        host = host,
-        port = port,
-        database = database,
-        user = user,
-        password = password
-    )
+    import time
+    for i in range(3):
+        try:
+            return psycopg2.connect(
+                host = host,
+                port = port,
+                database = database,
+                user = user,
+                password = password,
+                connect_timeout = 5
+            )
+        except Exception as e:
+            if i == 2: raise e
+            time.sleep(2)
 
 @st.cache_data(ttl=600)
 def load_data():
-    conn = get_connection()
-    query = "SELECT * FROM fact_listings"
-    df = pd.read_sql(query, conn)
-    return df
+    conn = None
+    try:
+        conn = get_connection()
+        query = "SELECT * FROM fact_listings"
+        df = pd.read_sql(query, conn)
+        return df
+    except Exception as e:
+        st.error(f"Lỗi kết nối Database: {e}")
+        return pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
 
 df = load_data()
 
-df['price'] = pd.to_numeric(df['price'], errors = 'coerce')
-df['area_m2'] = pd.to_numeric(df['area_m2'], errors = 'coerce')
+if not df.empty:
+    df['price'] = pd.to_numeric(df['price'], errors = 'coerce')
+    df['area_m2'] = pd.to_numeric(df['area_m2'], errors = 'coerce')
 
 st.title("🏠 Dashboard Thị trường Chung cư Việt Nam")
 total_rows =  len(df)
@@ -105,32 +120,30 @@ with colA:
         fig1 = px.bar(avg_price, x='district', y='price',
                      labels={'district':'Xã/Phường', 'price':'Giá trị trung bình'},
                      color='price', color_continuous_scale='RdYlGn_r')
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width="stretch")
     else:
         st.write("Không đủ dữ liệu")
 
 with colB:
     st.subheader("⚖️ Tương quan Diện tích - Tổng giá")
     if not filtered_df.empty:
-        # Sửa lại cho dễ nhìn theo yêu cầu của bạn
         fig2 = px.scatter(filtered_df, x='area_m2', y='price', 
                          color='city', hover_data=['title', 'district', 'price_per_m2'], 
                          labels={'area_m2':'Diện tích (m²)', 'price': 'Tổng giá (tỷ)', 'city': 'Thành phố'}, 
-                         opacity=0.8) # Tăng opacity
-        fig2.update_traces(marker=dict(size=10)) # Điểm to hơn chút cho dễ nhìn
-        st.plotly_chart(fig2, use_container_width=True)
+                         opacity=0.8)
+        fig2.update_traces(marker=dict(size=10))
+        st.plotly_chart(fig2, width="stretch")
     else:
         st.write("Không đủ dữ liệu")
 
 st.divider()
-# VẼ THÊM biểu đồ đơn giá m2 ở hàng dưới
 st.subheader("💰 Phân tích Đơn giá trên m² theo Khu vực")
 avg_price_m2 = filtered_df.groupby('district')['price_per_m2'].mean().sort_values(ascending=False).head(15).reset_index()
 if not avg_price_m2.empty:
     fig_m2 = px.bar(avg_price_m2, x='district', y='price_per_m2',
                    labels={'district':'Xã/Phường', 'price_per_m2':'Giá TB (Triệu/m²)'},
                    color='price_per_m2', color_continuous_scale='Viridis')
-    st.plotly_chart(fig_m2, use_container_width=True)
+    st.plotly_chart(fig_m2, width="stretch")
 else:
     st.write("Không đủ dữ liệu")
 
@@ -143,21 +156,21 @@ with colC:
     fig3 = px.pie(values=[has_docs, no_docs], 
                   names=['Có Sổ / Pháp lý an toàn', 'Không rõ / Đang chờ'],
                   color_discrete_sequence=['#2ecc71', '#e74c3c'])
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width="stretch")
 
 with colD:
     if selected_city == "Tất cả":
         st.subheader("📊 Mức độ phân bố giá giữa các tỉnh")
         fig4 = px.box(filtered_df, x='city', y='price', color='city',
                     labels={'city': 'Thành phố', 'price': 'Giá (tỷ VNĐ)'})
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width="stretch")
     else:
         st.subheader(f"📊 Mức độ phân bố giá tại {selected_city}")
         fig4 = px.histogram(filtered_df, x='price', nbins=20,
                             labels={'price': 'Khoảng giá (tỷ VNĐ)'},
                             color_discrete_sequence=['indigo'])
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width="stretch")
 
 st.divider()
 st.subheader("📋 Bảng tra cứu trực tiếp")
-st.dataframe(filtered_df[['title', 'city', 'district', 'price', 'area_m2', 'num_bedrooms', 'url']], use_container_width=True, hide_index=True)
+st.dataframe(filtered_df[['title', 'city', 'district', 'price', 'area_m2', 'num_bedrooms', 'url']], width="stretch", hide_index=True)
