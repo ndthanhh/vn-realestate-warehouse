@@ -1,4 +1,4 @@
-# Vietnam Real Estate Data Warehouse
+# Vietnam Real Estate Data Lakehouse
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python)](https://www.python.org/)
 [![Apache Airflow](https://img.shields.io/badge/Airflow-2.7.1-red?style=flat-square&logo=apache-airflow)](https://airflow.apache.org/)
@@ -6,7 +6,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose-blue?style=flat-square&logo=docker)](https://www.docker.com/)
 
-An end-to-end Data Warehouse system designed to collect, process, and visualize real estate data (specifically apartments) in Vietnam from [batdongsan.com.vn](https://batdongsan.com.vn).
+An end-to-end Data Lakehouse system designed to collect, process, and visualize real estate data (specifically apartments) in Vietnam from [batdongsan.com.vn](https://batdongsan.com.vn).
 
 ---
 
